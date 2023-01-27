@@ -19,7 +19,8 @@ async function main() {
     cloudFormation.addParameters();
     cloudFormation.addResources();
     cloudFormation.addOutputs();
-
+    
+    FileHelper.createDirectory('../result');
     FileHelper.createDirectory(`../result/${clusterName}`);
 
     FileHelper.writeJsonStringify(`../result/${clusterName}/cloudformation.json`, cloudFormation.getCloudFormation());
