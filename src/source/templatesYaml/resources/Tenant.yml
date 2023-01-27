@@ -1,0 +1,136 @@
+# Tenant
+
+TaskDefinitionTenant:
+  Type: AWS::ECS::TaskDefinition
+  DependsOn:
+    - LogGroupTenant
+  Properties:
+    Family: !Ref ServiceNameTenant
+    NetworkMode: awsvpc
+    RequiresCompatibilities:
+      - FARGATE
+    Cpu: 512
+    Memory: 1024
+    TaskRoleArn: !Ref ExecutionRoleArn
+    ExecutionRoleArn: !Ref ExecutionRoleArn
+    RuntimePlatform:
+      OperatingSystemFamily: LINUX
+    ContainerDefinitions:
+      - Name: !Ref ServiceNameTenant
+        Image: !Ref ImageTenant
+        PortMappings:
+          - ContainerPort: !Ref ContainerPort
+        Secrets:
+          - Name: SECRET_COMMON
+            ValueFrom: !Ref SecretCommon
+          - Name: SECRET_DB
+            ValueFrom: !Ref SecretDB
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-region: !Ref AWS::Region
+            awslogs-group: !Ref LogGroupTenant
+            awslogs-stream-prefix: ecs
+
+ServiceTenant:
+  Type: AWS::ECS::Service
+  DependsOn:
+    - ListenerRuleTenant
+    - DBInstance
+  Properties:
+    ServiceName: !Ref ServiceNameTenant
+    Cluster: !Ref Cluster
+    TaskDefinition: !Ref TaskDefinitionTenant
+    DesiredCount: 1
+    EnableECSManagedTags: true
+    LaunchType: FARGATE
+    PlatformVersion: LATEST
+    SchedulingStrategy: REPLICA
+    NetworkConfiguration:
+      AwsvpcConfiguration:
+        # change to DISABLED if you're using private subnets that have access to a NAT gateway
+        AssignPublicIp: ENABLED
+        Subnets:
+          - !Ref SubnetAPrivate
+          - !Ref SubnetBPrivate
+    ServiceRegistries:
+      - RegistryArn: !GetAtt ServiceDiscoveryServiceTenant.Arn
+    LoadBalancers:
+      - ContainerName: !Ref ServiceNameTenant
+        ContainerPort: !Ref ContainerPort
+        TargetGroupArn: !Ref TargetGroupTenant
+
+ServiceDiscoveryServiceTenant:
+  Type: AWS::ServiceDiscovery::Service
+  Properties:
+    DnsConfig:
+      DnsRecords:
+        - TTL: 300
+          Type: "A"
+      NamespaceId: !Ref NamespaceId
+      RoutingPolicy: MULTIVALUE
+    Name: !Join [".", [!Ref AWS::StackName, !Ref ServiceNameTenant]]
+    NamespaceId: !Ref NamespaceId
+    HealthCheckCustomConfig:
+      FailureThreshold: 1
+
+TargetGroupTenant:
+  Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  Properties:
+    VpcId: !Ref VPC
+    TargetType: ip
+    Protocol: HTTP
+    Name: !Join ["", [!Ref AWS::StackName, !Ref ServiceNameTenant]]
+    Port: !Ref ContainerPort
+    TargetGroupAttributes:
+      - Key: deregistration_delay.timeout_seconds
+        Value: 60 # default is 300
+    HealthCheckPath: !Ref HealthCheckPath
+    HealthCheckTimeoutSeconds: 120
+    HealthCheckIntervalSeconds: 300
+    UnhealthyThresholdCount: 10
+    HealthyThresholdCount: 2
+
+ListenerRuleTenant:
+  Type: AWS::ElasticLoadBalancingV2::ListenerRule
+  Properties:
+    Actions:
+      - Type: forward
+        ForwardConfig:
+          TargetGroups:
+            - TargetGroupArn: !Ref TargetGroupTenant
+              Weight: 1
+    Conditions:
+      - Field: host-header
+        HostHeaderConfig:
+          Values:
+            - !Join [
+                ".",
+                [
+                  !Ref AWS::StackName,
+                  !Ref ServiceNameTenant,
+                  !Ref HostedZoneName,
+                ],
+              ]
+    ListenerArn: !Ref ListenerHTTPS
+    Priority: 1
+
+DNSRecordTenant:
+  Type: AWS::Route53::RecordSet
+  Properties:
+    HostedZoneName: !Join ["", [!Ref HostedZoneName, .]]
+    Name:
+      !Join [
+        ".",
+        [!Ref AWS::StackName, !Ref ServiceNameTenant, !Ref HostedZoneName],
+      ]
+    Type: CNAME
+    ResourceRecords:
+      - !GetAtt LoadBalancer.DNSName
+    TTL: 300
+
+LogGroupTenant:
+  Type: AWS::Logs::LogGroup
+  Properties:
+    LogGroupName:
+      !Join ["", [/ecs/, !Ref AWS::StackName, "/", !Ref ServiceNameTenant]]

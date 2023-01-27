@@ -1,0 +1,295 @@
+{
+    "Cluster": {
+        "Type": "AWS::ECS::Cluster",
+        "Properties": {
+            "ClusterName": {
+                "Ref": "ClusterName"
+            }
+        }
+    },
+    "S3Bucket": {
+        "Type": "AWS::S3::Bucket",
+        "DeletionPolicy": "Retain",
+        "Properties": {
+            "BucketName": {
+                "Fn::Join": [
+                    "-",
+                    [
+                        "xioma",
+                        {
+                            "Ref": "AWS::StackName"
+                        }
+                    ]
+                ]
+            }
+        }
+    },
+    "DBClusterSubnetGroup": {
+        "Type": "AWS::DocDB::DBSubnetGroup",
+        "DeletionPolicy": "Retain",
+        "Properties": {
+            "DBSubnetGroupName": {
+                "Ref": "AWS::StackName"
+            },
+            "DBSubnetGroupDescription": {
+                "Ref": "AWS::StackName"
+            },
+            "SubnetIds": [
+                {
+                    "Ref": "SubnetAPrivate"
+                },
+                {
+                    "Ref": "SubnetBPrivate"
+                }
+            ]
+        }
+    },
+    "DBClusterParameterGroup": {
+        "Type": "AWS::DocDB::DBClusterParameterGroup",
+        "DeletionPolicy": "Retain",
+        "Properties": {
+            "Family": "docdb4.0",
+            "Name": {
+                "Ref": "AWS::StackName"
+            },
+            "Description": {
+                "Ref": "AWS::StackName"
+            },
+            "Parameters": {
+                "tls": "disabled",
+                "audit_logs": "disabled",
+                "ttl_monitor": "enabled"
+            }
+        }
+    },
+    "DBCluster": {
+        "Type": "AWS::DocDB::DBCluster",
+        "DeletionPolicy": "Retain",
+        "Properties": {
+            "DBClusterParameterGroupName": {
+                "Ref": "DBClusterParameterGroup"
+            },
+            "DBSubnetGroupName": {
+                "Ref": "DBClusterSubnetGroup"
+            },
+            "DBClusterIdentifier": {
+                "Ref": "AWS::StackName"
+            },
+            "EngineVersion": "4.0.0",
+            "MasterUsername": {
+                "Ref": "DBUsername"
+            },
+            "MasterUserPassword": {
+                "Ref": "DBPassword"
+            },
+            "Port": {
+                "Ref": "DBPort"
+            },
+            "StorageEncrypted": false
+        }
+    },
+    "DBInstance": {
+        "Type": "AWS::DocDB::DBInstance",
+        "DeletionPolicy": "Retain",
+        "Properties": {
+            "DBClusterIdentifier": {
+                "Ref": "DBCluster"
+            },
+            "AutoMinorVersionUpgrade": true,
+            "DBInstanceClass": "db.t3.medium",
+            "DBInstanceIdentifier": {
+                "Fn::Join": [
+                    "-",
+                    [
+                        {
+                            "Ref": "AWS::StackName"
+                        },
+                        "0"
+                    ]
+                ]
+            }
+        }
+    },
+    "RedisClusterSubnetGroup": {
+        "Type": "AWS::ElastiCache::SubnetGroup",
+        "DeletionPolicy": "Retain",
+        "Properties": {
+            "CacheSubnetGroupName": {
+                "Ref": "AWS::StackName"
+            },
+            "Description": {
+                "Ref": "AWS::StackName"
+            },
+            "SubnetIds": [
+                {
+                    "Ref": "SubnetAPrivate"
+                },
+                {
+                    "Ref": "SubnetBPrivate"
+                }
+            ]
+        }
+    },
+    "RedisCluster": {
+        "Type": "AWS::ElastiCache::CacheCluster",
+        "DeletionPolicy": "Retain",
+        "Properties": {
+            "CacheSubnetGroupName": {
+                "Ref": "RedisClusterSubnetGroup"
+            },
+            "ClusterName": {
+                "Ref": "AWS::StackName"
+            },
+            "CacheNodeType": "cache.t2.micro",
+            "Engine": "redis",
+            "NumCacheNodes": 1,
+            "VpcSecurityGroupIds": [
+                {
+                    "Ref": "VPCSecurityGroup"
+                }
+            ]
+        }
+    },
+    "SecretDB": {
+        "Type": "AWS::SecretsManager::Secret",
+        "DependsOn": [
+            "DBCluster",
+            "RedisCluster"
+        ],
+        "DeletionPolicy": "Retain",
+        "Properties": {
+            "Name": {
+                "Fn::Join": [
+                    "",
+                    [
+                        {
+                            "Ref": "AWS::StackName"
+                        },
+                        "_",
+                        "DB"
+                    ]
+                ]
+            },
+            "SecretString": {
+                "Fn::Sub": " { \"DB_IS_AWS\": \"true\", \"DB_HOST\": \"${DBCluster.Endpoint}\", \"DB_PORT\": \"${DBCluster.Port}\", \"DB_USER\": \"${DBUsername}\", \"DB_PASSWORD\": \"${DBPassword}\", \"CACHE_HOST\": \"${RedisCluster.RedisEndpoint.Address}\", \"CACHE_PORT\": \"${RedisCluster.RedisEndpoint.Port}\" }"
+            }
+        }
+    },
+    "LoadBalancer": {
+        "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+        "Properties": {
+            "IpAddressType": "ipv4",
+            "Name": {
+                "Ref": "AWS::StackName"
+            },
+            "Scheme": "internet-facing",
+            "Subnets": [
+                {
+                    "Ref": "SubnetAPublic"
+                },
+                {
+                    "Ref": "SubnetBPublic"
+                }
+            ],
+            "SecurityGroups": [
+                {
+                    "Ref": "VPCSecurityGroup"
+                },
+                {
+                    "Ref": "ECSSecurityGroup"
+                }
+            ],
+            "LoadBalancerAttributes": [
+                {
+                    "Key": "idle_timeout.timeout_seconds",
+                    "Value": 3600
+                }
+            ]
+        }
+    },
+    "ListenerHTTP": {
+        "Type": "AWS::ElasticLoadBalancingV2::Listener",
+        "Properties": {
+            "DefaultActions": [
+                {
+                    "Type": "redirect",
+                    "RedirectConfig": {
+                        "Protocol": "HTTPS",
+                        "Port": 443,
+                        "Host": "#{host}",
+                        "Path": "/#{path}",
+                        "Query": "#{query}",
+                        "StatusCode": "HTTP_301"
+                    }
+                }
+            ],
+            "LoadBalancerArn": {
+                "Ref": "LoadBalancer"
+            },
+            "Port": 80,
+            "Protocol": "HTTP"
+        }
+    },
+    "ListenerHTTPS": {
+        "Type": "AWS::ElasticLoadBalancingV2::Listener",
+        "Properties": {
+            "DefaultActions": [
+                {
+                    "Type": "fixed-response",
+                    "FixedResponseConfig": {
+                        "StatusCode": 503
+                    }
+                }
+            ],
+            "LoadBalancerArn": {
+                "Ref": "LoadBalancer"
+            },
+            "Port": {
+                "Ref": "LoadBalancerPort"
+            },
+            "Protocol": "HTTPS",
+            "Certificates": [
+                {
+                    "CertificateArn": {
+                        "Ref": "CertificateApp"
+                    }
+                }
+            ]
+        }
+    },
+    "ListenerHTTPSCertificatesList": {
+        "Type": "AWS::ElasticLoadBalancingV2::ListenerCertificate",
+        "Properties": {
+            "ListenerArn": {
+                "Ref": "ListenerHTTPS"
+            },
+            "Certificates": [
+                {
+                    "CertificateArn": {
+                        "Ref": "CertificateSync"
+                    }
+                },
+                {
+                    "CertificateArn": {
+                        "Ref": "CertificateUtilities"
+                    }
+                },
+                {
+                    "CertificateArn": {
+                        "Ref": "CertificateSales"
+                    }
+                },
+                {
+                    "CertificateArn": {
+                        "Ref": "CertificateTimeClocking"
+                    }
+                },
+                {
+                    "CertificateArn": {
+                        "Ref": "CertificateRSM"
+                    }
+                }
+            ]
+        }
+    } 
+}

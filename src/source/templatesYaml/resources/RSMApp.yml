@@ -1,0 +1,128 @@
+# RSM App
+
+TaskDefinitionRSMApp:
+  Type: AWS::ECS::TaskDefinition
+  DependsOn:
+    - LogGroupRSMApp
+  Properties:
+    Family: !Ref ServiceNameRSMApp
+    NetworkMode: awsvpc
+    RequiresCompatibilities:
+      - FARGATE
+    Cpu: 256
+    Memory: 0.5GB
+    TaskRoleArn: !Ref ExecutionRoleArn
+    ExecutionRoleArn: !Ref ExecutionRoleArn
+    RuntimePlatform:
+      OperatingSystemFamily: LINUX
+    ContainerDefinitions:
+      - Name: !Ref ServiceNameRSMApp
+        Image: !Ref ImageRSMApp
+        PortMappings:
+          - ContainerPort: !Ref ContainerPort
+        Secrets:
+          - Name: SECRET_COMMON
+            ValueFrom: !Ref SecretCommon
+          # - Name: SECRET_DB
+          #   ValueFrom: !Ref SecretDB
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-region: !Ref AWS::Region
+            awslogs-group: !Ref LogGroupRSMApp
+            awslogs-stream-prefix: ecs
+
+ServiceRSMApp:
+  Type: AWS::ECS::Service
+  DependsOn:
+    - ListenerRuleRSMApp
+  Properties:
+    ServiceName: !Ref ServiceNameRSMApp
+    Cluster: !Ref Cluster
+    TaskDefinition: !Ref TaskDefinitionRSMApp
+    DesiredCount: 1
+    EnableECSManagedTags: true
+    LaunchType: FARGATE
+    PlatformVersion: LATEST
+    SchedulingStrategy: REPLICA
+    NetworkConfiguration:
+      AwsvpcConfiguration:
+        # change to DISABLED if you're using private subnets that have access to a NAT gateway
+        AssignPublicIp: ENABLED
+        Subnets:
+          - !Ref SubnetAPrivate
+          - !Ref SubnetBPrivate
+    ServiceRegistries:
+      - RegistryArn: !GetAtt ServiceDiscoveryServiceRSMApp.Arn
+    LoadBalancers:
+      - ContainerName: !Ref ServiceNameRSMApp
+        ContainerPort: !Ref ContainerPort
+        TargetGroupArn: !Ref TargetGroupRSMApp
+
+ServiceDiscoveryServiceRSMApp:
+  Type: AWS::ServiceDiscovery::Service
+  Properties:
+    DnsConfig:
+      DnsRecords:
+        - TTL: 300
+          Type: "A"
+      NamespaceId: !Ref NamespaceId
+      RoutingPolicy: MULTIVALUE
+    Name: !Join [".", [!Ref AWS::StackName, !Ref ServiceNameRSMApp]]
+    NamespaceId: !Ref NamespaceId
+    HealthCheckCustomConfig:
+      FailureThreshold: 1
+
+TargetGroupRSMApp:
+  Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  Properties:
+    VpcId: !Ref VPC
+    TargetType: ip
+    Protocol: HTTP
+    Name: !Join ["", [!Ref AWS::StackName, !Ref ServiceNameRSMApp]]
+    Port: !Ref ContainerPort
+    TargetGroupAttributes:
+      - Key: deregistration_delay.timeout_seconds
+        Value: 60 # default is 300
+    HealthCheckPath: !Ref HealthCheckPath
+    HealthCheckTimeoutSeconds: 120
+    HealthCheckIntervalSeconds: 300
+    UnhealthyThresholdCount: 10
+    HealthyThresholdCount: 2
+
+ListenerRuleRSMApp:
+  Type: AWS::ElasticLoadBalancingV2::ListenerRule
+  Properties:
+    Actions:
+      - Type: forward
+        ForwardConfig:
+          TargetGroups:
+            - TargetGroupArn: !Ref TargetGroupRSMApp
+              Weight: 1
+    Conditions:
+      - Field: host-header
+        HostHeaderConfig:
+          Values:
+            - !Join [
+                ".",
+                [!Ref AWS::StackName, !Ref URLRSMApp, !Ref HostedZoneName],
+              ]
+    ListenerArn: !Ref ListenerHTTPS
+    Priority: 9
+
+DNSRecordRSMApp:
+  Type: AWS::Route53::RecordSet
+  Properties:
+    HostedZoneName: !Join ["", [!Ref HostedZoneName, .]]
+    Name:
+      !Join [".", [!Ref AWS::StackName, !Ref URLRSMApp, !Ref HostedZoneName]]
+    Type: CNAME
+    ResourceRecords:
+      - !GetAtt LoadBalancer.DNSName
+    TTL: 300
+
+LogGroupRSMApp:
+  Type: AWS::Logs::LogGroup
+  Properties:
+    LogGroupName:
+      !Join ["", [/ecs/, !Ref AWS::StackName, "/", !Ref ServiceNameRSMApp]]

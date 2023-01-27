@@ -1,0 +1,138 @@
+# TimePortal App
+
+TaskDefinitionTimePortalApp:
+  Type: AWS::ECS::TaskDefinition
+  DependsOn:
+    - LogGroupTimePortalApp
+  Properties:
+    Family: !Ref ServiceNameTimePortalApp
+    NetworkMode: awsvpc
+    RequiresCompatibilities:
+      - FARGATE
+    Cpu: 256
+    Memory: 0.5GB
+    TaskRoleArn: !Ref ExecutionRoleArn
+    ExecutionRoleArn: !Ref ExecutionRoleArn
+    RuntimePlatform:
+      OperatingSystemFamily: LINUX
+    ContainerDefinitions:
+      - Name: !Ref ServiceNameTimePortalApp
+        Image: !Ref ImageTimePortalApp
+        PortMappings:
+          - ContainerPort: !Ref ContainerPort
+        Secrets:
+          - Name: SECRET_COMMON
+            ValueFrom: !Ref SecretCommon
+          # - Name: SECRET_DB
+          #   ValueFrom: !Ref SecretDB
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-region: !Ref AWS::Region
+            awslogs-group: !Ref LogGroupTimePortalApp
+            awslogs-stream-prefix: ecs
+
+ServiceTimePortalApp:
+  Type: AWS::ECS::Service
+  DependsOn:
+    - ListenerRuleTimePortalApp
+  Properties:
+    ServiceName: !Ref ServiceNameTimePortalApp
+    Cluster: !Ref Cluster
+    TaskDefinition: !Ref TaskDefinitionTimePortalApp
+    DesiredCount: 1
+    EnableECSManagedTags: true
+    LaunchType: FARGATE
+    PlatformVersion: LATEST
+    SchedulingStrategy: REPLICA
+    NetworkConfiguration:
+      AwsvpcConfiguration:
+        # change to DISABLED if you're using private subnets that have access to a NAT gateway
+        AssignPublicIp: ENABLED
+        Subnets:
+          - !Ref SubnetAPrivate
+          - !Ref SubnetBPrivate
+    ServiceRegistries:
+      - RegistryArn: !GetAtt ServiceDiscoveryServiceTimePortalApp.Arn
+    LoadBalancers:
+      - ContainerName: !Ref ServiceNameTimePortalApp
+        ContainerPort: !Ref ContainerPort
+        TargetGroupArn: !Ref TargetGroupTimePortalApp
+
+ServiceDiscoveryServiceTimePortalApp:
+  Type: AWS::ServiceDiscovery::Service
+  Properties:
+    DnsConfig:
+      DnsRecords:
+        - TTL: 300
+          Type: "A"
+      NamespaceId: !Ref NamespaceId
+      RoutingPolicy: MULTIVALUE
+    Name: !Join [".", [!Ref AWS::StackName, !Ref ServiceNameTimePortalApp]]
+    NamespaceId: !Ref NamespaceId
+    HealthCheckCustomConfig:
+      FailureThreshold: 1
+
+TargetGroupTimePortalApp:
+  Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  Properties:
+    VpcId: !Ref VPC
+    TargetType: ip
+    Protocol: HTTP
+    Name: !Join ["", [!Ref AWS::StackName, !Ref ServiceNameTimePortalApp]]
+    Port: !Ref ContainerPort
+    TargetGroupAttributes:
+      - Key: deregistration_delay.timeout_seconds
+        Value: 60 # default is 300
+    HealthCheckPath: !Ref HealthCheckPath
+    HealthCheckTimeoutSeconds: 120
+    HealthCheckIntervalSeconds: 300
+    UnhealthyThresholdCount: 10
+    HealthyThresholdCount: 2
+
+ListenerRuleTimePortalApp:
+  Type: AWS::ElasticLoadBalancingV2::ListenerRule
+  Properties:
+    Actions:
+      - Type: forward
+        ForwardConfig:
+          TargetGroups:
+            - TargetGroupArn: !Ref TargetGroupTimePortalApp
+              Weight: 1
+    Conditions:
+      - Field: host-header
+        HostHeaderConfig:
+          Values:
+            - !Join [
+                ".",
+                [
+                  !Ref AWS::StackName,
+                  !Ref URLTimePortalApp,
+                  !Ref HostedZoneName,
+                ],
+              ]
+    ListenerArn: !Ref ListenerHTTPS
+    Priority: 8
+
+DNSRecordTimePortalApp:
+  Type: AWS::Route53::RecordSet
+  Properties:
+    HostedZoneName: !Join ["", [!Ref HostedZoneName, .]]
+    Name:
+      !Join [
+        ".",
+        [!Ref AWS::StackName, !Ref URLTimePortalApp, !Ref HostedZoneName],
+      ]
+    Type: CNAME
+    ResourceRecords:
+      - !GetAtt LoadBalancer.DNSName
+    TTL: 300
+
+LogGroupTimePortalApp:
+  Type: AWS::Logs::LogGroup
+  Properties:
+    LogGroupName:
+      !Join [
+        "",
+        [/ecs/, !Ref AWS::StackName, "/", !Ref ServiceNameTimePortalApp],
+      ]

@@ -1,0 +1,32 @@
+# URLs
+
+URLSalesApp:
+  Type: String
+  Default: sales
+URLTimePortalApp:
+  Type: String
+  Default: timeclocking
+URLRSMApp:
+  Type: String
+  Default: rsm
+
+# Certificates
+
+CertificateApp:
+  Type: String
+  Default: arn:aws:acm:eu-central-1:863482225243:certificate/5bd9b22f-9b7b-4c93-b94c-c36c5e368e7e
+CertificateSync:
+  Type: String
+  Default: arn:aws:acm:eu-central-1:863482225243:certificate/850d443f-1f86-467c-a806-28198db1851b
+CertificateUtilities:
+  Type: String
+  Default: arn:aws:acm:eu-central-1:863482225243:certificate/b8032f7b-0a50-4320-b0b5-f1029b3b7ad2
+CertificateSales:
+  Type: String
+  Default: arn:aws:acm:eu-central-1:863482225243:certificate/5a7818b2-a932-4d8e-b87c-7f33a5f4be45
+CertificateTimeClocking:
+  Type: String
+  Default: arn:aws:acm:eu-central-1:863482225243:certificate/b0011266-7cf9-41ee-a298-026e191c14f9
+CertificateRSM:
+  Type: String
+  Default: arn:aws:acm:eu-central-1:863482225243:certificate/1a12ab12-661c-42df-9544-3e0dd0557b34

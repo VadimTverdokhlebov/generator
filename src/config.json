@@ -1,0 +1,18 @@
+{
+    "clusterName": "Name",
+    "selectedImages": {
+        "Tenant": "release-3.2.15.0",
+        "Api": "release-3.2.15.0",
+        "ApiProxy": "master",
+        "Service": "release-3.2.15.0",
+        "Core": "release-3.2.15.0",
+        "Sync": "release-3.2.15.0",
+        "Utilities": "release-3.2.15.0",
+        "SalesApi": "release-3.2.15.0",
+        "SalesApp": "release-3.2.15.0",
+        "TimeportalApi": "release-3.2.15.0",
+        "TimeportalApp": "release-3.2.15.0",
+        "RSMApi": "release-3.2.15.0",
+        "RSMApp": "release-3.2.15.0"
+    }
+}

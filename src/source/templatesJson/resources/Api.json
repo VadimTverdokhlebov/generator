@@ -1,0 +1,169 @@
+{
+    "TaskDefinitionApi": {
+        "Type": "AWS::ECS::TaskDefinition",
+        "DependsOn": [
+            "LogGroupApi"
+        ],
+        "Properties": {
+            "Family": {
+                "Ref": "ServiceNameApi"
+            },
+            "NetworkMode": "awsvpc",
+            "RequiresCompatibilities": [
+                "FARGATE"
+            ],
+            "Cpu": 2048,
+            "Memory": 4096,
+            "TaskRoleArn": {
+                "Ref": "ExecutionRoleArn"
+            },
+            "ExecutionRoleArn": {
+                "Ref": "ExecutionRoleArn"
+            },
+            "RuntimePlatform": {
+                "OperatingSystemFamily": "LINUX"
+            },
+            "ContainerDefinitions": [
+                {
+                    "Name": {
+                        "Ref": "ServiceNameApi"
+                    },
+                    "Image": {
+                        "Ref": "ImageApi"
+                    },
+                    "PortMappings": [
+                        {
+                            "ContainerPort": {
+                                "Ref": "ContainerPort"
+                            }
+                        }
+                    ],
+                    "Secrets": [
+                        {
+                            "Name": "SECRET_COMMON",
+                            "ValueFrom": {
+                                "Ref": "SecretCommon"
+                            }
+                        },
+                        {
+                            "Name": "SECRET_DB",
+                            "ValueFrom": {
+                                "Ref": "SecretDB"
+                            }
+                        }
+                    ],
+                    "LogConfiguration": {
+                        "LogDriver": "awslogs",
+                        "Options": {
+                            "awslogs-region": {
+                                "Ref": "AWS::Region"
+                            },
+                            "awslogs-group": {
+                                "Ref": "LogGroupApi"
+                            },
+                            "awslogs-stream-prefix": "ecs"
+                        }
+                    }
+                }
+            ]
+        }
+    },
+    "ServiceApi": {
+        "Type": "AWS::ECS::Service",
+        "Properties": {
+            "ServiceName": {
+                "Ref": "ServiceNameApi"
+            },
+            "Cluster": {
+                "Ref": "Cluster"
+            },
+            "TaskDefinition": {
+                "Ref": "TaskDefinitionApi"
+            },
+            "DesiredCount": 1,
+            "EnableECSManagedTags": true,
+            "LaunchType": "FARGATE",
+            "PlatformVersion": "LATEST",
+            "SchedulingStrategy": "REPLICA",
+            "NetworkConfiguration": {
+                "AwsvpcConfiguration": {
+                    "AssignPublicIp": "ENABLED",
+                    "Subnets": [
+                        {
+                            "Ref": "SubnetAPrivate"
+                        },
+                        {
+                            "Ref": "SubnetBPrivate"
+                        }
+                    ]
+                }
+            },
+            "ServiceRegistries": [
+                {
+                    "RegistryArn": {
+                        "Fn::GetAtt": [
+                            "ServiceDiscoveryServiceApi",
+                            "Arn"
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "ServiceDiscoveryServiceApi": {
+        "Type": "AWS::ServiceDiscovery::Service",
+        "Properties": {
+            "DnsConfig": {
+                "DnsRecords": [
+                    {
+                        "TTL": 300,
+                        "Type": "A"
+                    }
+                ],
+                "NamespaceId": {
+                    "Ref": "NamespaceId"
+                },
+                "RoutingPolicy": "MULTIVALUE"
+            },
+            "Name": {
+                "Fn::Join": [
+                    ".",
+                    [
+                        {
+                            "Ref": "AWS::StackName"
+                        },
+                        {
+                            "Ref": "ServiceNameApi"
+                        }
+                    ]
+                ]
+            },
+            "NamespaceId": {
+                "Ref": "NamespaceId"
+            },
+            "HealthCheckCustomConfig": {
+                "FailureThreshold": 1
+            }
+        }
+    },
+    "LogGroupApi": {
+        "Type": "AWS::Logs::LogGroup",
+        "Properties": {
+            "LogGroupName": {
+                "Fn::Join": [
+                    "",
+                    [
+                        "/ecs/",
+                        {
+                            "Ref": "AWS::StackName"
+                        },
+                        "/",
+                        {
+                            "Ref": "ServiceNameApi"
+                        }
+                    ]
+                ]
+            }
+        }
+    }
+}

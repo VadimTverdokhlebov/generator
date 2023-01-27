@@ -1,0 +1,104 @@
+{
+    "EndpointTenant": {
+        "Description": "Tenant Public URL",
+        "Value": {
+            "Ref": "DNSRecordTenant"
+        }
+    },
+    "EndpointApi": {
+        "Description": "API Public URL",
+        "Value": {
+            "Ref": "DNSRecordApiProxy"
+        }
+    },
+    "EndpointService": {
+        "Description": "Service Public URL",
+        "Value": {
+            "Ref": "DNSRecordService"
+        }
+    },
+    "EndpointCore": {
+        "Description": "Core Public URL",
+        "Value": {
+            "Ref": "DNSRecordCore"
+        }
+    },
+    "EndpointSync": {
+        "Description": "Sync Public URL",
+        "Value": {
+            "Ref": "DNSRecordSync"
+        }
+    },
+    "EndpointUtilities": {
+        "Description": "Utilities Public URL",
+        "Value": {
+            "Ref": "DNSRecordUtilities"
+        }
+    },
+    "EndpointSalesApp": {
+        "Description": "SalesApp Public URL",
+        "Value": {
+            "Ref": "DNSRecordSalesApp"
+        }
+    },
+    "EndpointTimePortalApp": {
+        "Description": "TimePortalApp Public URL",
+        "Value": {
+            "Ref": "DNSRecordTimePortalApp"
+        }
+    },
+    "EndpointRSMApp": {
+        "Description": "RSMApp Public URL",
+        "Value": {
+            "Ref": "DNSRecordRSMApp"
+        }
+    },
+    "DBUsername": {
+        "Description": "DB Username",
+        "Value": {
+            "Ref": "DBUsername"
+        }
+    },
+    "DBPassword": {
+        "Description": "DB Password",
+        "Value": {
+            "Ref": "DBPassword"
+        }
+    },
+    "DBEndpoint": {
+        "Description": "DB Endpoint",
+        "Value": {
+            "Fn::GetAtt": [
+                "DBCluster",
+                "Endpoint"
+            ]
+        }
+    },
+    "DBPort": {
+        "Description": "DB Port",
+        "Value": {
+            "Fn::GetAtt": [
+                "DBCluster",
+                "Port"
+            ]
+        }
+    },
+    "CacheEndpoint": {
+        "Description": "Cache Endpoint",
+        "Value": {
+            "Fn::GetAtt": [
+                "RedisCluster",
+                "RedisEndpoint.Address"
+            ]
+        }
+    },
+    "CachePort": {
+        "Description": "Cache Port",
+        "Value": {
+            "Fn::GetAtt": [
+                "RedisCluster",
+                "RedisEndpoint.Port"
+            ]
+        }
+    }
+}

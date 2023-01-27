@@ -1,0 +1,61 @@
+VPC:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-0b4c764d3f78e8128
+SubnetAPublic:
+  Type: AWS::EC2::Subnet::Id
+  Default: subnet-086f692691b7f1be9
+SubnetBPublic:
+  Type: AWS::EC2::Subnet::Id
+  Default: subnet-07a98b0be2e860163
+SubnetAPrivate:
+  Type: AWS::EC2::Subnet::Id
+  Default: subnet-0ffe667a5c5942880
+SubnetBPrivate:
+  Type: AWS::EC2::Subnet::Id
+  Default: subnet-07de63f353c23e1b7
+ContainerPort:
+  Type: Number
+  Default: 80
+# TODO:
+ExecutionRoleArn:
+  Type: String
+  Default: arn:aws:iam::863482225243:role/ecsTaskExecutionRole
+NamespaceId:
+  Type: String
+  Default: ns-37pghcqobvwviul5
+NamespaceName:
+  Type: String
+  Default: automotivecloud.private
+ClusterName: ###
+  Type: String
+  Default: tir
+SecretCommon:
+  Type: String
+  Default: arn:aws:secretsmanager:eu-central-1:863482225243:secret:tir_COMMON-RZAUym
+HostedZoneName:
+  Type: String
+  Default: automotivecloud.net
+LoadBalancerPort:
+  Type: Number
+  Default: 443
+DBPort:
+  Type: Number
+  Default: 27017
+DBUsername:
+  Type: String
+  Default: root
+DBPassword:
+  Type: String
+  Default: 12345678
+HealthCheckGracePeriodSeconds:
+  Type: Number
+  Default: 2147483647
+HealthCheckPath:
+  Type: String
+  Default: '/health'
+VPCSecurityGroup:
+  Type: String
+  Default: sg-0cc2d723917a45c4f
+ECSSecurityGroup:
+  Type: String
+  Default: sg-0dce844b3a3670de4

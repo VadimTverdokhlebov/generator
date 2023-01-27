@@ -1,0 +1,316 @@
+{
+    "TaskDefinitionSync": {
+        "Type": "AWS::ECS::TaskDefinition",
+        "DependsOn": [
+            "LogGroupSync"
+        ],
+        "Properties": {
+            "Family": {
+                "Ref": "ServiceNameSync"
+            },
+            "NetworkMode": "awsvpc",
+            "RequiresCompatibilities": [
+                "FARGATE"
+            ],
+            "Cpu": 256,
+            "Memory": "0.5GB",
+            "TaskRoleArn": {
+                "Ref": "ExecutionRoleArn"
+            },
+            "ExecutionRoleArn": {
+                "Ref": "ExecutionRoleArn"
+            },
+            "RuntimePlatform": {
+                "OperatingSystemFamily": "LINUX"
+            },
+            "ContainerDefinitions": [
+                {
+                    "Name": {
+                        "Ref": "ServiceNameSync"
+                    },
+                    "Image": {
+                        "Ref": "ImageSync"
+                    },
+                    "PortMappings": [
+                        {
+                            "ContainerPort": {
+                                "Ref": "ContainerPort"
+                            }
+                        }
+                    ],
+                    "Secrets": [
+                        {
+                            "Name": "SECRET_COMMON",
+                            "ValueFrom": {
+                                "Ref": "SecretCommon"
+                            }
+                        },
+                        {
+                            "Name": "SECRET_DB",
+                            "ValueFrom": {
+                                "Ref": "SecretDB"
+                            }
+                        }
+                    ],
+                    "LogConfiguration": {
+                        "LogDriver": "awslogs",
+                        "Options": {
+                            "awslogs-region": {
+                                "Ref": "AWS::Region"
+                            },
+                            "awslogs-group": {
+                                "Ref": "LogGroupSync"
+                            },
+                            "awslogs-stream-prefix": "ecs"
+                        }
+                    }
+                }
+            ]
+        }
+    },
+    "ServiceSync": {
+        "Type": "AWS::ECS::Service",
+        "DependsOn": [
+            "ListenerRuleSync",
+            "DBInstance"
+        ],
+        "Properties": {
+            "ServiceName": {
+                "Ref": "ServiceNameSync"
+            },
+            "Cluster": {
+                "Ref": "Cluster"
+            },
+            "TaskDefinition": {
+                "Ref": "TaskDefinitionSync"
+            },
+            "DesiredCount": 1,
+            "EnableECSManagedTags": true,
+            "LaunchType": "FARGATE",
+            "PlatformVersion": "LATEST",
+            "SchedulingStrategy": "REPLICA",
+            "NetworkConfiguration": {
+                "AwsvpcConfiguration": {
+                    "AssignPublicIp": "ENABLED",
+                    "Subnets": [
+                        {
+                            "Ref": "SubnetAPrivate"
+                        },
+                        {
+                            "Ref": "SubnetBPrivate"
+                        }
+                    ]
+                }
+            },
+            "ServiceRegistries": [
+                {
+                    "RegistryArn": {
+                        "Fn::GetAtt": [
+                            "ServiceDiscoveryServiceSync",
+                            "Arn"
+                        ]
+                    }
+                }
+            ],
+            "LoadBalancers": [
+                {
+                    "ContainerName": {
+                        "Ref": "ServiceNameSync"
+                    },
+                    "ContainerPort": {
+                        "Ref": "ContainerPort"
+                    },
+                    "TargetGroupArn": {
+                        "Ref": "TargetGroupSync"
+                    }
+                }
+            ]
+        }
+    },
+    "ServiceDiscoveryServiceSync": {
+        "Type": "AWS::ServiceDiscovery::Service",
+        "Properties": {
+            "DnsConfig": {
+                "DnsRecords": [
+                    {
+                        "TTL": 300,
+                        "Type": "A"
+                    }
+                ],
+                "NamespaceId": {
+                    "Ref": "NamespaceId"
+                },
+                "RoutingPolicy": "MULTIVALUE"
+            },
+            "Name": {
+                "Fn::Join": [
+                    ".",
+                    [
+                        {
+                            "Ref": "AWS::StackName"
+                        },
+                        {
+                            "Ref": "ServiceNameSync"
+                        }
+                    ]
+                ]
+            },
+            "NamespaceId": {
+                "Ref": "NamespaceId"
+            },
+            "HealthCheckCustomConfig": {
+                "FailureThreshold": 1
+            }
+        }
+    },
+    "TargetGroupSync": {
+        "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+        "Properties": {
+            "VpcId": {
+                "Ref": "VPC"
+            },
+            "TargetType": "ip",
+            "Protocol": "HTTP",
+            "Name": {
+                "Fn::Join": [
+                    "",
+                    [
+                        {
+                            "Ref": "AWS::StackName"
+                        },
+                        {
+                            "Ref": "ServiceNameSync"
+                        }
+                    ]
+                ]
+            },
+            "Port": {
+                "Ref": "ContainerPort"
+            },
+            "TargetGroupAttributes": [
+                {
+                    "Key": "deregistration_delay.timeout_seconds",
+                    "Value": 60
+                }
+            ],
+            "HealthCheckPath": {
+                "Ref": "HealthCheckPath"
+            },
+            "HealthCheckTimeoutSeconds": 120,
+            "HealthCheckIntervalSeconds": 300,
+            "UnhealthyThresholdCount": 10,
+            "HealthyThresholdCount": 2
+        }
+    },
+    "ListenerRuleSync": {
+        "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
+        "Properties": {
+            "Actions": [
+                {
+                    "Type": "forward",
+                    "ForwardConfig": {
+                        "TargetGroups": [
+                            {
+                                "TargetGroupArn": {
+                                    "Ref": "TargetGroupSync"
+                                },
+                                "Weight": 1
+                            }
+                        ]
+                    }
+                }
+            ],
+            "Conditions": [
+                {
+                    "Field": "host-header",
+                    "HostHeaderConfig": {
+                        "Values": [
+                            {
+                                "Fn::Join": [
+                                    ".",
+                                    [
+                                        {
+                                            "Ref": "AWS::StackName"
+                                        },
+                                        {
+                                            "Ref": "ServiceNameSync"
+                                        },
+                                        {
+                                            "Ref": "HostedZoneName"
+                                        }
+                                    ]
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ],
+            "ListenerArn": {
+                "Ref": "ListenerHTTPS"
+            },
+            "Priority": 5
+        }
+    },
+    "DNSRecordSync": {
+        "Type": "AWS::Route53::RecordSet",
+        "Properties": {
+            "HostedZoneName": {
+                "Fn::Join": [
+                    "",
+                    [
+                        {
+                            "Ref": "HostedZoneName"
+                        },
+                        "."
+                    ]
+                ]
+            },
+            "Name": {
+                "Fn::Join": [
+                    ".",
+                    [
+                        {
+                            "Ref": "AWS::StackName"
+                        },
+                        {
+                            "Ref": "ServiceNameSync"
+                        },
+                        {
+                            "Ref": "HostedZoneName"
+                        }
+                    ]
+                ]
+            },
+            "Type": "CNAME",
+            "ResourceRecords": [
+                {
+                    "Fn::GetAtt": [
+                        "LoadBalancer",
+                        "DNSName"
+                    ]
+                }
+            ],
+            "TTL": 300
+        }
+    },
+    "LogGroupSync": {
+        "Type": "AWS::Logs::LogGroup",
+        "Properties": {
+            "LogGroupName": {
+                "Fn::Join": [
+                    "",
+                    [
+                        "/ecs/",
+                        {
+                            "Ref": "AWS::StackName"
+                        },
+                        "/",
+                        {
+                            "Ref": "ServiceNameSync"
+                        }
+                    ]
+                ]
+            }
+        }
+    }
+}

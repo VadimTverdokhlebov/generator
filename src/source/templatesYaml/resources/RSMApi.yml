@@ -1,0 +1,77 @@
+# RSM API
+
+TaskDefinitionRSMApi:
+  Type: AWS::ECS::TaskDefinition
+  DependsOn:
+    - LogGroupRSMApi
+  Properties:
+    Family: !Ref ServiceNameRSMApi
+    NetworkMode: awsvpc
+    RequiresCompatibilities:
+      - FARGATE
+    Cpu: 256
+    Memory: 0.5GB
+    TaskRoleArn: !Ref ExecutionRoleArn
+    ExecutionRoleArn: !Ref ExecutionRoleArn
+    RuntimePlatform:
+      OperatingSystemFamily: LINUX
+    ContainerDefinitions:
+      - Name: !Ref ServiceNameRSMApi
+        Image: !Ref ImageRSMApi
+        PortMappings:
+          - ContainerPort: !Ref ContainerPort
+        Secrets:
+          - Name: SECRET_COMMON
+            ValueFrom: !Ref SecretCommon
+          - Name: SECRET_DB
+            ValueFrom: !Ref SecretDB
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-region: !Ref AWS::Region
+            awslogs-group: !Ref LogGroupRSMApi
+            awslogs-stream-prefix: ecs
+
+ServiceRSMApi:
+  Type: AWS::ECS::Service
+  # DependsOn:
+  #   - ListenerRuleRSMApi
+  #   - DBInstance
+  Properties:
+    ServiceName: !Ref ServiceNameRSMApi
+    Cluster: !Ref Cluster
+    TaskDefinition: !Ref TaskDefinitionRSMApi
+    DesiredCount: 1
+    EnableECSManagedTags: true
+    LaunchType: FARGATE
+    PlatformVersion: LATEST
+    SchedulingStrategy: REPLICA
+    NetworkConfiguration:
+      AwsvpcConfiguration:
+        # change to DISABLED if you're using private subnets that have access to a NAT gateway
+        AssignPublicIp: ENABLED
+        Subnets:
+          - !Ref SubnetAPrivate
+          - !Ref SubnetBPrivate
+    ServiceRegistries:
+      - RegistryArn: !GetAtt ServiceDiscoveryServiceRSMApi.Arn
+
+ServiceDiscoveryServiceRSMApi:
+  Type: AWS::ServiceDiscovery::Service
+  Properties:
+    DnsConfig:
+      DnsRecords:
+        - TTL: 300
+          Type: "A"
+      NamespaceId: !Ref NamespaceId
+      RoutingPolicy: MULTIVALUE
+    Name: !Join [".", [!Ref AWS::StackName, !Ref URLRSMApp]]
+    NamespaceId: !Ref NamespaceId
+    HealthCheckCustomConfig:
+      FailureThreshold: 1
+
+LogGroupRSMApi:
+  Type: AWS::Logs::LogGroup
+  Properties:
+    LogGroupName:
+      !Join ["", [/ecs/, !Ref AWS::StackName, "/", !Ref ServiceNameRSMApi]]

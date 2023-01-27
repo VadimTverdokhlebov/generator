@@ -1,0 +1,268 @@
+{
+    "TaskDefinitionSalesApp": {
+        "Type": "AWS::ECS::TaskDefinition",
+        "DependsOn": [
+            "LogGroupSalesApp"
+        ],
+        "Properties": {
+            "Family": {
+                "Ref": "ServiceNameSalesApp"
+            },
+            "NetworkMode": "awsvpc",
+            "RequiresCompatibilities": [
+                "FARGATE"
+            ],
+            "Cpu": 256,
+            "Memory": "0.5GB",
+            "TaskRoleArn": {
+                "Ref": "ExecutionRoleArn"
+            },
+            "ExecutionRoleArn": {
+                "Ref": "ExecutionRoleArn"
+            },
+            "RuntimePlatform": {
+                "OperatingSystemFamily": "LINUX"
+            },
+            "ContainerDefinitions": [
+                {
+                    "Name": {
+                        "Ref": "ServiceNameSalesApp"
+                    },
+                    "Image": {
+                        "Ref": "ImageSalesApp"
+                    },
+                    "PortMappings": [
+                        {
+                            "ContainerPort": {
+                                "Ref": "ContainerPort"
+                            }
+                        }
+                    ],
+                    "Secrets": [
+                        {
+                            "Name": "SECRET_COMMON",
+                            "ValueFrom": {
+                                "Ref": "SecretCommon"
+                            }
+                        },
+                        {
+                            "Name": "SECRET_DB",
+                            "ValueFrom": {
+                                "Ref": "SecretDB"
+                            }
+                        }
+                    ],
+                    "LogConfiguration": {
+                        "LogDriver": "awslogs",
+                        "Options": {
+                            "awslogs-region": {
+                                "Ref": "AWS::Region"
+                            },
+                            "awslogs-group": {
+                                "Ref": "LogGroupSalesApp"
+                            },
+                            "awslogs-stream-prefix": "ecs"
+                        }
+                    }
+                }
+            ]
+        }
+    },
+    "ServiceSalesApp": {
+        "Type": "AWS::ECS::Service",
+        "DependsOn": [
+            "ListenerRuleSalesApp",
+            "ServiceTenant"
+        ],
+        "Properties": {
+            "ServiceName": {
+                "Ref": "ServiceNameSalesApp"
+            },
+            "Cluster": {
+                "Ref": "Cluster"
+            },
+            "TaskDefinition": {
+                "Ref": "TaskDefinitionSalesApp"
+            },
+            "DesiredCount": 1,
+            "EnableECSManagedTags": true,
+            "LaunchType": "FARGATE",
+            "PlatformVersion": "LATEST",
+            "SchedulingStrategy": "REPLICA",
+            "NetworkConfiguration": {
+                "AwsvpcConfiguration": {
+                    "AssignPublicIp": "ENABLED",
+                    "Subnets": [
+                        {
+                            "Ref": "SubnetAPrivate"
+                        },
+                        {
+                            "Ref": "SubnetBPrivate"
+                        }
+                    ]
+                }
+            },
+            "LoadBalancers": [
+                {
+                    "ContainerName": {
+                        "Ref": "ServiceNameSalesApp"
+                    },
+                    "ContainerPort": {
+                        "Ref": "ContainerPort"
+                    },
+                    "TargetGroupArn": {
+                        "Ref": "TargetGroupSalesApp"
+                    }
+                }
+            ]
+        }
+    },
+    "TargetGroupSalesApp": {
+        "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+        "Properties": {
+            "VpcId": {
+                "Ref": "VPC"
+            },
+            "TargetType": "ip",
+            "Protocol": "HTTP",
+            "Name": {
+                "Fn::Join": [
+                    "",
+                    [
+                        {
+                            "Ref": "AWS::StackName"
+                        },
+                        {
+                            "Ref": "ServiceNameSalesApp"
+                        }
+                    ]
+                ]
+            },
+            "Port": {
+                "Ref": "ContainerPort"
+            },
+            "TargetGroupAttributes": [
+                {
+                    "Key": "deregistration_delay.timeout_seconds",
+                    "Value": 60
+                }
+            ],
+            "HealthCheckPath": "/",
+            "HealthCheckTimeoutSeconds": 120,
+            "HealthCheckIntervalSeconds": 300,
+            "UnhealthyThresholdCount": 10,
+            "HealthyThresholdCount": 2
+        }
+    },
+    "ListenerRuleSalesApp": {
+        "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
+        "Properties": {
+            "Actions": [
+                {
+                    "Type": "forward",
+                    "ForwardConfig": {
+                        "TargetGroups": [
+                            {
+                                "TargetGroupArn": {
+                                    "Ref": "TargetGroupSalesApp"
+                                },
+                                "Weight": 1
+                            }
+                        ]
+                    }
+                }
+            ],
+            "Conditions": [
+                {
+                    "Field": "host-header",
+                    "HostHeaderConfig": {
+                        "Values": [
+                            {
+                                "Fn::Join": [
+                                    ".",
+                                    [
+                                        {
+                                            "Ref": "AWS::StackName"
+                                        },
+                                        {
+                                            "Ref": "URLSalesApp"
+                                        },
+                                        {
+                                            "Ref": "HostedZoneName"
+                                        }
+                                    ]
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ],
+            "ListenerArn": {
+                "Ref": "ListenerHTTPS"
+            },
+            "Priority": 7
+        }
+    },
+    "DNSRecordSalesApp": {
+        "Type": "AWS::Route53::RecordSet",
+        "Properties": {
+            "HostedZoneName": {
+                "Fn::Join": [
+                    "",
+                    [
+                        {
+                            "Ref": "HostedZoneName"
+                        },
+                        "."
+                    ]
+                ]
+            },
+            "Name": {
+                "Fn::Join": [
+                    ".",
+                    [
+                        {
+                            "Ref": "AWS::StackName"
+                        },
+                        {
+                            "Ref": "URLSalesApp"
+                        },
+                        {
+                            "Ref": "HostedZoneName"
+                        }
+                    ]
+                ]
+            },
+            "Type": "CNAME",
+            "ResourceRecords": [
+                {
+                    "Fn::GetAtt": [
+                        "LoadBalancer",
+                        "DNSName"
+                    ]
+                }
+            ],
+            "TTL": 300
+        }
+    },
+    "LogGroupSalesApp": {
+        "Type": "AWS::Logs::LogGroup",
+        "Properties": {
+            "LogGroupName": {
+                "Fn::Join": [
+                    "",
+                    [
+                        "/ecs/",
+                        {
+                            "Ref": "AWS::StackName"
+                        },
+                        "/",
+                        {
+                            "Ref": "ServiceNameSalesApp"
+                        }
+                    ]
+                ]
+            }
+        }
+    }
+}

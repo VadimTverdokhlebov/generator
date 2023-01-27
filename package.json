@@ -1,0 +1,17 @@
+{
+  "name": "generator",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cloudformation-schema-js-yaml": "^2.0.0",
+    "inquirer": "^9.1.4",
+    "js-yaml": "^4.1.0"
+  }
+}

@@ -1,0 +1,80 @@
+# TimePortal API
+
+TaskDefinitionTimePortalApi:
+  Type: AWS::ECS::TaskDefinition
+  DependsOn:
+    - LogGroupTimePortalApi
+  Properties:
+    Family: !Ref ServiceNameTimePortalApi
+    NetworkMode: awsvpc
+    RequiresCompatibilities:
+      - FARGATE
+    Cpu: 256
+    Memory: 0.5GB
+    TaskRoleArn: !Ref ExecutionRoleArn
+    ExecutionRoleArn: !Ref ExecutionRoleArn
+    RuntimePlatform:
+      OperatingSystemFamily: LINUX
+    ContainerDefinitions:
+      - Name: !Ref ServiceNameTimePortalApi
+        Image: !Ref ImageTimePortalApi
+        PortMappings:
+          - ContainerPort: !Ref ContainerPort
+        Secrets:
+          - Name: SECRET_COMMON
+            ValueFrom: !Ref SecretCommon
+          - Name: SECRET_DB
+            ValueFrom: !Ref SecretDB
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-region: !Ref AWS::Region
+            awslogs-group: !Ref LogGroupTimePortalApi
+            awslogs-stream-prefix: ecs
+
+ServiceTimePortalApi:
+  Type: AWS::ECS::Service
+  # DependsOn:
+  #   - ListenerRuleTimePortalApi
+  #   - DBInstance
+  Properties:
+    ServiceName: !Ref ServiceNameTimePortalApi
+    Cluster: !Ref Cluster
+    TaskDefinition: !Ref TaskDefinitionTimePortalApi
+    DesiredCount: 1
+    EnableECSManagedTags: true
+    LaunchType: FARGATE
+    PlatformVersion: LATEST
+    SchedulingStrategy: REPLICA
+    NetworkConfiguration:
+      AwsvpcConfiguration:
+        # change to DISABLED if you're using private subnets that have access to a NAT gateway
+        AssignPublicIp: ENABLED
+        Subnets:
+          - !Ref SubnetAPrivate
+          - !Ref SubnetBPrivate
+    ServiceRegistries:
+      - RegistryArn: !GetAtt ServiceDiscoveryServiceTimePortalApi.Arn
+
+ServiceDiscoveryServiceTimePortalApi:
+  Type: AWS::ServiceDiscovery::Service
+  Properties:
+    DnsConfig:
+      DnsRecords:
+        - TTL: 300
+          Type: "A"
+      NamespaceId: !Ref NamespaceId
+      RoutingPolicy: MULTIVALUE
+    Name: !Join [".", [!Ref AWS::StackName, !Ref URLTimePortalApp]]
+    NamespaceId: !Ref NamespaceId
+    HealthCheckCustomConfig:
+      FailureThreshold: 1
+
+LogGroupTimePortalApi:
+  Type: AWS::Logs::LogGroup
+  Properties:
+    LogGroupName:
+      !Join [
+        "",
+        [/ecs/, !Ref AWS::StackName, "/", !Ref ServiceNameTimePortalApi],
+      ]
