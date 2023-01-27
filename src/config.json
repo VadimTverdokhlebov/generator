@@ -1,5 +1,6 @@
 {
-    "clusterName": "Name",
+    "clusterName": "NameName",
+    "secretCommon": "SecretSecret",
     "selectedImages": {
         "Tenant": "release-3.2.15.0",
         "Api": "release-3.2.15.0",

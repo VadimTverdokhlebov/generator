@@ -22,9 +22,13 @@ export class CloudFormationBuilder {
     #images = {};
     #services = {};
     #selectedImages = {};
+    #clusterName;
+    #secretCommon;
 
-    constructor(selectedImages) {
+    constructor(selectedImages, clusterName, secretCommon) {
         this.#selectedImages = selectedImages;
+        this.#clusterName = clusterName;
+        this.#secretCommon = secretCommon;
     }
 
     createImagesAndServices() {
@@ -63,6 +67,23 @@ export class CloudFormationBuilder {
             .readCloudFormationYamlParseFile('./source/templatesYaml/defaultParametrsEnd.yml');
 
         this.#cloudFormation.Parameters = Object.assign(defaultParametrsBegin, this.#images, this.#services, defaultParametrsEnd);
+
+        this.#addClusterName();
+        this.#addSecretCommon();
+    }
+
+    #addClusterName() {
+        this.#cloudFormation.Parameters.ClusterName = {
+            Type: "String",
+            Default: this.#clusterName
+        }
+    }
+
+    #addSecretCommon() {
+        this.#cloudFormation.Parameters.SecretCommon = {
+            Type: "String",
+            Default: this.#secretCommon
+        }
     }
 
     addResources() {

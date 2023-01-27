@@ -9,12 +9,11 @@ async function main() {
     const dataServices = new ServicesData();
     await dataServices.chooseMethodReceivingImage();
 
-    const clusterName = dataServices.getClusterName();
     const selectedImages = dataServices.getServicesImage();
+    const clusterName = dataServices.getClusterName();
+    const secretCommon = dataServices.getSecretCommon();
 
-    // secretsCommon
-
-    const cloudFormation = new CloudFormationBuilder(selectedImages);
+    const cloudFormation = new CloudFormationBuilder(selectedImages, clusterName, secretCommon);
     cloudFormation.createImagesAndServices();
     cloudFormation.addParameters();
     cloudFormation.addResources();

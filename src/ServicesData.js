@@ -19,12 +19,20 @@ export class ServicesData {
             choices: ['Service', 'Core', 'Sync', 'Utilities', 'Sales', 'Timeportal', 'RSM']
         }
     ]
-
+    
     #questionClusterName = [
         {
             type: 'input',
             message: 'Enter the cluster name',
             name: 'clusterName',
+        }
+    ]
+    
+    #questionSecretCommon = [
+        {
+            type: 'input',
+            message: 'Enter the secret common',
+            name: 'secretCommon',
         }
     ]
 
@@ -49,6 +57,7 @@ export class ServicesData {
 
     #selectedImages;
     #clusterName;
+    #secretCommon;
     #services;
 
     async chooseMethodReceivingImage() {
@@ -57,6 +66,7 @@ export class ServicesData {
 
         if (choose) {
             this.#clusterName = FileHelper.readJsonParseFile('./config.json').clusterName;
+            this.#secretCommon = FileHelper.readJsonParseFile('./config.json').secretCommon;
             this.#selectedImages = FileHelper.readJsonParseFile('./config.json').selectedImages;
         } else {
             await this.#requestServicesData();
@@ -67,6 +77,9 @@ export class ServicesData {
 
         this.#clusterName = await inquirer.prompt(this.#questionClusterName)
             .then((answers) => answers.clusterName);
+
+        this.#secretCommon = await inquirer.prompt(this.#questionSecretCommon)
+            .then((answers) => answers.secretCommon);
 
         this.#services = await inquirer.prompt(this.#questionCheckbox)
             .then((answers) => answers.services);
@@ -112,6 +125,10 @@ export class ServicesData {
 
     getClusterName() {
         return this.#clusterName;
+    }
+
+    getSecretCommon() {
+        return this.#secretCommon;
     }
 
     getServicesImage() {
